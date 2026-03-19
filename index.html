@@ -1,104 +1,149 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>Skewb 座標取得ツール</title>
+<title>Skewb 解析 + CSV出力</title>
 <style>
-  body { font-family: sans-serif; }
-  canvas { border:1px solid #000; cursor: crosshair; }
+  body { font-family: sans-serif; padding: 1em; }
+  #results div { margin-bottom: 0.5em; }
+  button { margin-right: 1em; }
 </style>
 </head>
 <body>
 
-<canvas id="canvas"></canvas>
-
-<p id="count">0 / 30</p>
-<button onclick="resetPoints()">リセット</button>
-
-<pre id="output"></pre>
+<h2>Skewb 解析 (GitHub Pages 完全版)</h2>
+<button id="runParse">解析開始</button>
+<button id="downloadCSV">CSVダウンロード</button>
+<div id="results"></div>
 
 <script>
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-const output = document.getElementById("output");
-const countText = document.getElementById("count");
-
-let points = [];
-let colors = [];
-const MAX_POINTS = 25
-
-// 🔥 ここで画像読み込み
-const img = new Image();
-img.src = "images/10a.png";
-
-img.onload = () => {
-  canvas.width = img.width;
-  canvas.height = img.height;
-  ctx.drawImage(img, 0, 0);
+// 色のRGB対応
+const colorMap = {
+  "R": [237, 27, 36],
+  "G": [38, 175, 77],
+  "O": [255, 127, 38],
+  "B": [63, 71, 204],
+  "Y": [254, 242, 0]
 };
 
-canvas.addEventListener("click", e => {
-  if(points.length >= MAX_POINTS) return;
+// 25点の座標
+const points = [
+  [287, 77], [269, 43], [335, 82], [265, 120], [184, 88], [193, 193], [249, 163],
+  [229, 265], [163, 217], [170, 128], [325, 197], [362, 119], [373, 213], [284, 255],
+  [278, 159], [78, 143], [129, 104], [118, 195], [44, 173], [37, 53], [429, 143],
+  [489, 57], [490, 159], [397, 198], [402, 95]
+];
 
-  const rect = canvas.getBoundingClientRect();
-  const x = Math.round(e.clientX - rect.left);
-  const y = Math.round(e.clientY - rect.top);
+// images/ 内のファイル名（すべて列挙）
+let imageFiles = [
+"images/1a.png","images/1b.png","images/1c.png","images/1d.png",
+"images/2a.png","images/2b.png","images/2c.png","images/2d.png",
+"images/3a.png","images/3b.png","images/3c.png","images/3d.png",
+"images/4a.png","images/4b.png","images/4c.png","images/4d.png",
+"images/5a.png","images/5b.png","images/5c.png","images/5d.png",
+"images/6a.png","images/6b.png","images/6c.png","images/6d.png",
+"images/7a.png","images/7b.png","images/7c.png","images/7d.png",
+"images/8a.png","images/8b.png","images/8c.png","images/8d.png",
+"images/9a.png","images/9b.png",
+"images/10a.png","images/10b.png",
+"images/11a.png","images/11b.png","images/11c.png","images/11d.png",
+"images/12a.png","images/12b.png","images/12c.png","images/12d.png",
+"images/13a.png","images/13b.png","images/13c.png","images/13d.png",
+"images/14a.png","images/14b.png","images/14c.png","images/14d.png",
+"images/15a.png","images/15b.png",
+"images/16.png",
+"images/17a.png","images/17b.png",
+"images/18a.png","images/18b.png","images/18c.png","images/18d.png","images/18e.png","images/18f.png","images/18g.png","images/18h.png",
+"images/19a.png","images/19b.png","images/19c.png","images/19d.png","images/19e.png","images/19f.png","images/19g.png","images/19h.png",
+"images/20a.png","images/20b.png","images/20c.png","images/20d.png","images/20e.png","images/20f.png","images/20g.png","images/20h.png",
+"images/21a.png","images/21b.png","images/21c.png","images/21d.png","images/21e.png","images/21f.png","images/21g.png","images/21h.png",
+"images/22a.png","images/22b.png","images/22c.png","images/22d.png",
+"images/23a.png","images/23b.png","images/23c.png","images/23d.png","images/23e.png","images/23f.png","images/23g.png","images/23h.png",
+"images/24a.png","images/24b.png","images/24c.png","images/24d.png",
+"images/25a.png","images/25b.png","images/25c.png","images/25d.png",
+"images/26a.png","images/26b.png","images/26c.png","images/26d.png",
+"images/27.png","images/28.png",
+"images/29a.png","images/29b.png",
+"images/30a.png","images/30b.png",
+"images/31.png","images/32.png","images/33.png",
+"images/34a.png","images/34b.png",
+"images/35a.png","images/35b.png",
+"images/36a.png","images/36b.png",
+"images/37a.png","images/37b.png",
+"images/1a.png","images/1b.png","images/1c.png","images/1d.png",
+"images/3a.png","images/3b.png","images/3c.png","images/3d.png",
+"images/Uperm.png"
+];
 
-  // RGB取得
-  const pixel = ctx.getImageData(x, y, 1, 1).data;
-  const [r,g,b] = pixel;
+// ソート関数：数字＋アルファベット順
+imageFiles.sort((a, b) => {
+  const re = /(\d+)([a-z]?)/i;
+  const ma = a.match(re);
+  const mb = b.match(re);
+  if (!ma || !mb) return a.localeCompare(b);
+  const na = parseInt(ma[1]), nb = parseInt(mb[1]);
+  if (na !== nb) return na - nb;
+  return (ma[2] || "").localeCompare(mb[2] || "");
+});
 
-  points.push([x, y]);
-  colors.push([r, g, b]);
+function getClosestColor(rgb) {
+  let minDist = Infinity, closest="?";
+  for(const [letter,val] of Object.entries(colorMap)){
+    const dist = Math.sqrt(
+      (rgb[0]-val[0])**2 + (rgb[1]-val[1])**2 + (rgb[2]-val[2])**2
+    );
+    if(dist<minDist){minDist=dist; closest=letter;}
+  }
+  return closest;
+}
 
-  drawPoint(x, y, points.length);
-  updateUI();
+let resultsData=[];
 
-  if(points.length === MAX_POINTS){
-    generateOutput();
+document.getElementById("runParse").addEventListener("click", async () => {
+  const resultsDiv=document.getElementById("results");
+  resultsDiv.innerHTML="";
+  resultsData=[];
+
+  for(const file of imageFiles){
+    const caseName=file.replace(/^images\/|\.png$/gi,"");
+    const img=new Image();
+    img.crossOrigin="anonymous";
+    img.src=file;
+    await img.decode();
+
+    const canvas=document.createElement("canvas");
+    canvas.width=img.width; canvas.height=img.height;
+    const ctx=canvas.getContext("2d");
+    ctx.drawImage(img,0,0);
+
+    const colors=points.map(([x,y])=>{
+      const pixel=ctx.getImageData(x,y,1,1).data;
+      return getClosestColor([pixel[0],pixel[1],pixel[2]]);
+    });
+
+    const finalString=colors.join("")+"WWWWW";
+
+    const div=document.createElement("div");
+    div.innerHTML=`<strong>${caseName}:</strong> ${finalString}`;
+    resultsDiv.appendChild(div);
+
+    resultsData.push([caseName,finalString]);
   }
 });
 
-function drawPoint(x, y, num){
-  ctx.fillStyle = "red";
-  ctx.beginPath();
-  ctx.arc(x, y, 5, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = "red";
-  ctx.font = "12px sans-serif";
-  ctx.fillText(num, x+5, y-5);
-}
-
-function updateUI(){
-  countText.textContent = `${points.length} / ${MAX_POINTS}`;
-}
-
-function generateOutput(){
-  let text = "const points = [\n";
-  for(const p of points){
-    text += `  [${p[0]}, ${p[1]}],\n`;
-  }
-  text += "];\n\n";
-
-  text += "const colors = [\n";
-  for(const c of colors){
-    text += `  [${c[0]}, ${c[1]}, ${c[2]}],\n`;
-  }
-  text += "];";
-
-  output.textContent = text;
-}
-
-function resetPoints(){
-  points = [];
-  colors = [];
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.drawImage(img, 0, 0); // ←画像再描画
-  output.textContent = "";
-  countText.textContent = `0 / ${MAX_POINTS}`;
-}
+// CSVダウンロード
+document.getElementById("downloadCSV").addEventListener("click",()=>{
+  if(!resultsData.length){alert("まず解析を実行してください！"); return;}
+  let csv="ケース名,30桁コード\n";
+  resultsData.forEach(([name,code])=>{csv+=`${name},${code}\n`;});
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download="skewb_results.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+});
 </script>
-
 </body>
 </html>
