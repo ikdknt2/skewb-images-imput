@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Skewb 座標取得ツール</title>
+<style>
+  body { font-family: sans-serif; }
+  canvas { border:1px solid #000; cursor: crosshair; }
+</style>
+</head>
+<body>
+
+<input type="file" id="file"><br><br>
+<canvas id="canvas"></canvas>
+
+<p id="count">0 / 30</p>
+<button onclick="resetPoints()">リセット</button>
+
+<pre id="output"></pre>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const fileInput = document.getElementById("file");
+const output = document.getElementById("output");
+const countText = document.getElementById("count");
+
+let points = [];
+const MAX_POINTS = 30;
+
+fileInput.onchange = e => {
+  const img = new Image();
+  img.src = URL.createObjectURL(e.target.files[0]);
+
+  img.onload = () => {
+    canvas.width = img.width;
+    canvas.height = img.height;
+    ctx.drawImage(img, 0, 0);
+    points = [];
+    updateUI();
+  };
+};
+
+canvas.addEventListener("click", e => {
+  if(points.length >= MAX_POINTS) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.round(e.clientX - rect.left);
+  const y = Math.round(e.clientY - rect.top);
+
+  points.push([x, y]);
+
+  drawPoint(x, y, points.length);
+  updateUI();
+
+  if(points.length === MAX_POINTS){
+    generateOutput();
+  }
+});
+
+function drawPoint(x, y, num){
+  ctx.fillStyle = "red";
+  ctx.beginPath();
+  ctx.arc(x, y, 5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "red";
+  ctx.font = "12px sans-serif";
+  ctx.fillText(num, x+5, y-5);
+}
+
+function updateUI(){
+  countText.textContent = `${points.length} / ${MAX_POINTS}`;
+}
+
+function generateOutput(){
+  let text = "const points = [\n";
+  for(const p of points){
+    text += `  [${p[0]}, ${p[1]}],\n`;
+  }
+  text += "];";
+  output.textContent = text;
+}
+
+function resetPoints(){
+  points = [];
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  output.textContent = "";
+  countText.textContent = `0 / ${MAX_POINTS}`;
+}
+</script>
+
+</body>
+</html>
